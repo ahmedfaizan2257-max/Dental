@@ -1,0 +1,6 @@
+{
+  "name": "3D Dental Grill CAD System",
+  "description": "Proof of concept 3D dental design system with automated tooth segmentation, procedural grill generation, and custom diamond placement.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
