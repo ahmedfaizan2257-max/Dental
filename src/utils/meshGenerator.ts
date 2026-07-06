@@ -520,3 +520,83 @@ export function segmentUploadedMesh(
   
   return { segmentedMesh, vertexToothMap };
 }
+
+/**
+ * Calculates local centroids for each tooth in the custom centered geometry,
+ * aligning the procedural grill coordinates perfectly to any uploaded scan.
+ */
+export function computeAdaptedTeethPositions(
+  geometry: THREE.BufferGeometry,
+  defaultTeeth: Tooth[]
+): Tooth[] {
+  const posAttr = geometry.attributes.position as THREE.BufferAttribute;
+  if (!posAttr) return defaultTeeth;
+
+  const sums = Array.from({ length: 17 }, () => new THREE.Vector3());
+  const counts = Array.from({ length: 17 }, () => 0);
+
+  geometry.computeBoundingBox();
+  const bbox = geometry.boundingBox!;
+  const center = new THREE.Vector3();
+  bbox.getCenter(center);
+  const extents = new THREE.Vector3();
+  bbox.getSize(extents);
+
+  for (let i = 0; i < posAttr.count; i++) {
+    const vx = posAttr.getX(i);
+    const vy = posAttr.getY(i);
+    const vz = posAttr.getZ(i);
+
+    // Coordinate translation: shift to local origin (vertices are already translated to center)
+    const vPos = new THREE.Vector3(vx, vy, vz);
+
+    // Scale mesh position to match standard 34x38mm arch size for lookup
+    const searchPos = vPos.clone();
+    searchPos.x *= (34 / (extents.x || 1));
+    searchPos.z *= (38 / (extents.z || 1));
+    searchPos.y *= (10 / (extents.y || 1));
+
+    // Find closest tooth center among our 16 teeth
+    let minDistance = Infinity;
+    let closestToothIdx = -1;
+
+    for (let tIdx = 0; tIdx < 16; tIdx++) {
+      const toothPos = getToothPosition(tIdx);
+      toothPos.y += 3.5;
+
+      const dist = searchPos.distanceTo(toothPos);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestToothIdx = tIdx;
+      }
+    }
+
+    // Check if it's gums (same logic as segmentUploadedMesh)
+    const relY = vy / (extents.y || 1) + 0.5; // since it is centered, relY is from 0 to 1
+    const isGum = relY < 0.28 || minDistance > 18.0;
+
+    if (!isGum && closestToothIdx !== -1) {
+      const toothId = closestToothIdx + 1;
+      sums[toothId].add(vPos);
+      counts[toothId]++;
+    }
+  }
+
+  // Create adapted teeth list
+  return defaultTeeth.map((tooth) => {
+    const toothId = tooth.id;
+    if (counts[toothId] > 10) { // Require at least 10 vertices for a reliable centroid
+      const centroid = sums[toothId].divideScalar(counts[toothId]);
+      return {
+        ...tooth,
+        position: [centroid.x, centroid.y, centroid.z] as [number, number, number],
+      };
+    }
+    // Fallback to default position in local coordinate space
+    const defaultPos = getToothPosition(toothId - 1);
+    return {
+      ...tooth,
+      position: [defaultPos.x, defaultPos.y, defaultPos.z] as [number, number, number],
+    };
+  });
+}

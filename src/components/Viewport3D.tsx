@@ -10,7 +10,7 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 
 import { Tooth, GrillSettings, DiamondSettings, DentalScan } from '../types';
-import { createProceduralDentalArch, segmentUploadedMesh } from '../utils/meshGenerator';
+import { createProceduralDentalArch, segmentUploadedMesh, computeAdaptedTeethPositions, getToothPosition } from '../utils/meshGenerator';
 import { createGrillMesh } from '../utils/grillGenerator';
 import { createDiamondsMesh, animateDiamondsSparkle } from '../utils/diamondGenerator';
 import { Maximize2, ShieldAlert, Sparkles, Orbit, Grid3X3, Eye } from 'lucide-react';
@@ -25,7 +25,7 @@ interface Viewport3DProps {
   grillSettings: GrillSettings;
   diamondSettings: DiamondSettings;
   customScanFile: File | null;
-  onScanLoaded: (scan: DentalScan | null) => void;
+  onScanLoaded: (scan: DentalScan | null, adaptedTeeth?: Tooth[]) => void;
   showGingiva: boolean;
   showGrill: boolean;
   showDiamonds: boolean;
@@ -253,19 +253,56 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       let foundHoverId: number | null = null;
       
       if (intersects.length > 0) {
-        // Find closest object representing a tooth
-        for (let i = 0; i < intersects.length; i++) {
-          let obj: THREE.Object3D | null = intersects[i].object;
-          
-          // bubble up to locate tooth mesh metadata
-          while (obj && obj !== dentalGroupRef.current) {
-            if (obj.userData && obj.userData.type === 'tooth') {
-              foundHoverId = obj.userData.toothId;
-              break;
+        const firstIntersect = intersects[0];
+        let obj: THREE.Object3D | null = firstIntersect.object;
+        
+        if (obj && (obj.name === 'SegmentedUploadedMesh' || obj.name === 'outline' || obj.parent?.name === 'SegmentedUploadedMesh')) {
+          const localPoint = firstIntersect.point.clone();
+          if (customMeshRef.current) {
+            customMeshRef.current.worldToLocal(localPoint);
+            const searchPos = localPoint.clone();
+            const geometry = customMeshRef.current.geometry;
+            geometry.computeBoundingBox();
+            const bbox = geometry.boundingBox!;
+            const extents = new THREE.Vector3();
+            bbox.getSize(extents);
+            
+            searchPos.x *= (34 / (extents.x || 1));
+            searchPos.z *= (38 / (extents.z || 1));
+            searchPos.y *= (10 / (extents.y || 1));
+            
+            let minDistance = Infinity;
+            let closestToothIdx = -1;
+            
+            for (let tIdx = 0; tIdx < 16; tIdx++) {
+              const toothPos = getToothPosition(tIdx);
+              toothPos.y += 3.5;
+              const dist = searchPos.distanceTo(toothPos);
+              if (dist < minDistance) {
+                minDistance = dist;
+                closestToothIdx = tIdx;
+              }
             }
-            obj = obj.parent;
+            
+            if (closestToothIdx !== -1) {
+              foundHoverId = closestToothIdx + 1;
+            }
           }
-          if (foundHoverId !== null) break;
+        } else {
+          // Find closest object representing a tooth
+          for (let i = 0; i < intersects.length; i++) {
+            let innerObj: THREE.Object3D | null = intersects[i].object;
+            
+            // bubble up to locate tooth mesh metadata
+            while (innerObj && innerObj !== dentalGroupRef.current) {
+              if (innerObj.userData && innerObj.userData.type === 'tooth') {
+                foundHoverId = innerObj.userData.toothId;
+                break;
+              }
+              innerObj = innerObj.parent;
+            }
+            if (foundHoverId !== null) break;
+          }
         }
       }
       
@@ -287,16 +324,53 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       let foundSelectId: number | null = null;
       
       if (intersects.length > 0) {
-        for (let i = 0; i < intersects.length; i++) {
-          let obj: THREE.Object3D | null = intersects[i].object;
-          while (obj && obj !== dentalGroupRef.current) {
-            if (obj.userData && obj.userData.type === 'tooth') {
-              foundSelectId = obj.userData.toothId;
-              break;
+        const firstIntersect = intersects[0];
+        let obj: THREE.Object3D | null = firstIntersect.object;
+        
+        if (obj && (obj.name === 'SegmentedUploadedMesh' || obj.name === 'outline' || obj.parent?.name === 'SegmentedUploadedMesh')) {
+          const localPoint = firstIntersect.point.clone();
+          if (customMeshRef.current) {
+            customMeshRef.current.worldToLocal(localPoint);
+            const searchPos = localPoint.clone();
+            const geometry = customMeshRef.current.geometry;
+            geometry.computeBoundingBox();
+            const bbox = geometry.boundingBox!;
+            const extents = new THREE.Vector3();
+            bbox.getSize(extents);
+            
+            searchPos.x *= (34 / (extents.x || 1));
+            searchPos.z *= (38 / (extents.z || 1));
+            searchPos.y *= (10 / (extents.y || 1));
+            
+            let minDistance = Infinity;
+            let closestToothIdx = -1;
+            
+            for (let tIdx = 0; tIdx < 16; tIdx++) {
+              const toothPos = getToothPosition(tIdx);
+              toothPos.y += 3.5;
+              const dist = searchPos.distanceTo(toothPos);
+              if (dist < minDistance) {
+                minDistance = dist;
+                closestToothIdx = tIdx;
+              }
             }
-            obj = obj.parent;
+            
+            if (closestToothIdx !== -1) {
+              foundSelectId = closestToothIdx + 1;
+            }
           }
-          if (foundSelectId !== null) break;
+        } else {
+          for (let i = 0; i < intersects.length; i++) {
+            let innerObj: THREE.Object3D | null = intersects[i].object;
+            while (innerObj && innerObj !== dentalGroupRef.current) {
+              if (innerObj.userData && innerObj.userData.type === 'tooth') {
+                foundSelectId = innerObj.userData.toothId;
+                break;
+              }
+              innerObj = innerObj.parent;
+            }
+            if (foundSelectId !== null) break;
+          }
         }
       }
       
@@ -459,12 +533,28 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     if (showGrill && teeth.some(t => t.selectedForGrill)) {
       const modeString = viewMode === 'wireframe' ? 'wireframe' : 'shaded';
       const grillMesh = createGrillMesh(teeth, grillSettings, modeString);
+      
+      // If custom scan is active, align the grill mesh with its world transforms!
+      if (customScanFile && customMeshRef.current) {
+        grillMesh.position.copy(customMeshRef.current.position);
+        grillMesh.rotation.copy(customMeshRef.current.rotation);
+        grillMesh.scale.copy(customMeshRef.current.scale);
+      }
+      
       scene.add(grillMesh);
       grillGroupRef.current = grillMesh;
 
       // Generate Diamonds if toggled on top of Grill
       if (showDiamonds && diamondSettings.enabled) {
         const diamondsMesh = createDiamondsMesh(teeth, diamondSettings, grillSettings.thickness, modeString);
+        
+        // If custom scan is active, align the diamonds mesh with its world transforms!
+        if (customScanFile && customMeshRef.current) {
+          diamondsMesh.position.copy(customMeshRef.current.position);
+          diamondsMesh.rotation.copy(customMeshRef.current.rotation);
+          diamondsMesh.scale.copy(customMeshRef.current.scale);
+        }
+        
         scene.add(diamondsMesh);
         diamondsGroupRef.current = diamondsMesh;
       }
@@ -584,6 +674,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         
         customMeshRef.current = customMesh;
 
+        // Adapt teeth positions to match the geometry of the uploaded scan
+        const adaptedTeeth = computeAdaptedTeethPositions(geometry, teeth);
+
         // Count stats
         const vertCount = geometry.attributes.position ? geometry.attributes.position.count : 0;
         const triCount = geometry.index ? geometry.index.count / 3 : vertCount / 3;
@@ -596,7 +689,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           vertexCount: Math.round(vertCount),
           triangleCount: Math.round(triCount),
           isLowerArch: customScanFile.name.toLowerCase().includes('lower') || customScanFile.name.toLowerCase().includes('mandible'),
-        });
+        }, adaptedTeeth);
 
         setLoadingProgress(null);
       } catch (err: any) {

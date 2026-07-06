@@ -141,10 +141,14 @@ export default function App() {
   const handleClearScan = () => {
     setCustomScanFile(null);
     setLoadedScan(null);
+    setTeeth(generateTeethList());
   };
 
-  const handleScanLoaded = (scan: DentalScan | null) => {
+  const handleScanLoaded = (scan: DentalScan | null, adaptedTeeth?: Tooth[]) => {
     setLoadedScan(scan);
+    if (adaptedTeeth) {
+      setTeeth(adaptedTeeth);
+    }
   };
 
   const handleCameraPresetChange = (preset: 'front' | 'top' | 'left' | 'right') => {
