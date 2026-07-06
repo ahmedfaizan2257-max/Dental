@@ -11,7 +11,7 @@ import { estimateGrillSpecs } from '../utils/grillGenerator';
 import { estimateDiamondSpecs } from '../utils/diamondGenerator';
 import { 
   Award, Layers, CheckSquare, Square, 
-  Sparkles, DollarSign, Scale, Calendar, HelpCircle 
+  Sparkles, DollarSign, Scale, Calendar, HelpCircle, FileText
 } from 'lucide-react';
 
 interface TeethListProps {
@@ -24,6 +24,7 @@ interface TeethListProps {
   onBatchSelect: (type: 'all' | 'front' | 'none') => void;
   grillSettings: GrillSettings;
   diamondSettings: DiamondSettings;
+  onOpenExport?: () => void;
 }
 
 export const TeethList: React.FC<TeethListProps> = ({
@@ -36,6 +37,7 @@ export const TeethList: React.FC<TeethListProps> = ({
   onBatchSelect,
   grillSettings,
   diamondSettings,
+  onOpenExport,
 }) => {
   // Find currently active tooth (defaults to first central incisor if none selected)
   const activeTooth = teeth.find(t => t.id === selectedToothId) || teeth[7]; // Tooth ID 8
@@ -117,7 +119,7 @@ export const TeethList: React.FC<TeethListProps> = ({
                     className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full border border-zinc-950/60"
                     style={{ backgroundColor: tooth.color }}
                     title={`Tooth ${tooth.id} Color Badge`}
-                  />Parenthesis
+                  />
 
                   {/* Grill Included checkbox */}
                   <button
@@ -250,6 +252,17 @@ export const TeethList: React.FC<TeethListProps> = ({
           <p className="text-[9px] text-zinc-500 text-center italic mt-1 leading-snug">
             PoC Estimates based on average casting densities of {grillSettings.material.split(' ').pop()} and hand-setting gem settings.
           </p>
+
+          {onOpenExport && (
+            <button
+              id="export-specs-trigger-btn"
+              onClick={onOpenExport}
+              className="w-full mt-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5 uppercase tracking-wider border border-blue-500/30 hover:border-blue-400/40 cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Export Lab Script & Specs
+            </button>
+          )}
         </div>
 
       </div>

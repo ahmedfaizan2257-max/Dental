@@ -39,6 +39,9 @@ interface ControlPanelProps {
 
   cameraPreset: 'front' | 'top' | 'left' | 'right' | null;
   onCameraPresetChange: (preset: 'front' | 'top' | 'left' | 'right') => void;
+
+  activeTab?: 'scan' | 'grill' | 'diamonds';
+  onActiveTabChange?: (tab: 'scan' | 'grill' | 'diamonds') => void;
 }
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -61,10 +64,15 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onToggleGrid,
   cameraPreset,
   onCameraPresetChange,
+  activeTab: externalActiveTab,
+  onActiveTabChange,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [activeTab, setActiveTab] = useState<'scan' | 'grill' | 'diamonds'>('scan');
+  const [localActiveTab, setLocalActiveTab] = useState<'scan' | 'grill' | 'diamonds'>('scan');
+
+  const activeTab = externalActiveTab !== undefined ? externalActiveTab : localActiveTab;
+  const setActiveTab = onActiveTabChange !== undefined ? onActiveTabChange : setLocalActiveTab;
 
   // Drag and Drop files
   const handleDragOver = (e: React.DragEvent) => {
